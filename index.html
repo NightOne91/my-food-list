@@ -3,29 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的私藏美食雲端雜誌 - 編輯與壓縮加強版</title>
+    <title>我的私藏美食雲端誌 - 終極全功能版</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     
     <style>
-        /* --- 2. 基礎設定（淺色、咖啡下午茶風、優雅 serif 字體） --- */
         :root {
             --bg-img: url('https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1600');
-            --bg-overlay: rgba(252, 250, 247, 0.85); 
-            --card-bg: rgba(255, 255, 255, 0.96);
+            --bg-overlay: rgba(252, 250, 247, 0.9); 
+            --card-bg: #ffffff;
             --accent-color: #b5835a;
             --text-main: #3d3d3d;
-            --shadow: 0 8px 24px rgba(0,0,0,0.08);
+            --text-muted: #888;
+            --shadow: 0 10px 30px rgba(0,0,0,0.06);
+            --input-bg: #fafafa;
+        }
+
+        /* 夜間模式變數 */
+        [data-theme="dark"] {
+            --bg-overlay: rgba(20, 20, 20, 0.95);
+            --card-bg: #2d2d2d;
+            --text-main: #e0e0e0;
+            --text-muted: #aaa;
+            --shadow: 0 10px 30px rgba(0,0,0,0.3);
+            --input-bg: #3d3d3d;
         }
 
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
 
         body {
-            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+            font-family: "PingFang TC", "Heiti TC", sans-serif; 
             color: var(--text-main); margin: 0; padding: 20px;
-            display: flex; flex-direction: column; align-items: center;
-            min-height: 100vh; position: relative;
+            display: flex; flex-direction: column; align-items: center; 
+            min-height: 100vh; transition: background 0.3s;
         }
 
         body::before {
@@ -37,93 +48,88 @@
             background: var(--bg-overlay); z-index: -1;
         }
 
+        /* 功能按鈕區 */
+        .top-bar {
+            position: fixed; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 100;
+        }
+        .icon-btn {
+            background: var(--card-bg); border: none; width: 40px; height: 40px; 
+            border-radius: 50%; cursor: pointer; box-shadow: var(--shadow);
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+        }
+
         h1 { 
-            font-family: 'Noto Serif TC', serif; font-weight: 700; 
-            letter-spacing: 3px; margin: 40px 0 20px 0; color: #2c2c2c;
-            text-shadow: 2px 2px 4px rgba(255,255,255,0.8);
+            font-family: 'Noto Serif TC', serif; font-weight: 700; cursor: pointer;
+            letter-spacing: 3px; margin: 60px 0 10px 0; color: var(--text-main);
         }
 
-        /* --- 3. 分類標籤設計 --- */
-        .filter-bar {
-            display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center;
+        /* 搜尋與篩選 */
+        .search-container { width: 100%; max-width: 400px; margin-bottom: 20px; }
+        .search-input {
+            width: 100%; padding: 12px 20px; border-radius: 30px; border: 1px solid var(--accent-color);
+            background: var(--card-bg); color: var(--text-main); outline: none; box-sizing: border-box;
         }
+
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center; }
         .filter-btn {
-            padding: 8px 20px; border-radius: 20px; border: 1px solid var(--accent-color);
-            background: rgba(255,255,255,0.5); color: var(--accent-color);
-            cursor: pointer; font-size: 14px; transition: 0.3s;
-            backdrop-filter: blur(5px);
+            padding: 6px 18px; border-radius: 20px; border: 1px solid var(--accent-color);
+            background: transparent; color: var(--accent-color); cursor: pointer; font-size: 13px;
         }
-        .filter-btn.active {
-            background: var(--accent-color); color: white;
-            box-shadow: 0 4px 12px rgba(181, 131, 90, 0.3);
+        .filter-btn.active { background: var(--accent-color); color: white; }
+
+        .admin-controls { display: none; margin-bottom: 30px; }
+        .btn-add {
+            background: var(--accent-color); color: white; border: none; padding: 10px 25px;
+            border-radius: 50px; cursor: pointer; font-weight: bold;
         }
 
-        .admin-controls { display: flex; gap: 10px; margin-bottom: 40px; align-items: center;}
-        .btn-add-main {
-            background-color: var(--accent-color); color: white; border: none; padding: 12px 25px;
-            border-radius: 50px; cursor: pointer; font-size: 15px; font-weight: bold;
-            box-shadow: var(--shadow); transition: 0.3s;
-        }
-        .sync-status { font-size: 12px; color: #888; }
-
-        /* --- 4. 瀑布流容器 --- */
-        .food-grid {
-            columns: 3 240px; column-gap: 25px; width: 100%; max-width: 1100px; padding: 20px;
-            box-sizing: border-box; margin: 0 auto;
-        }
-
+        /* 瀑布流與卡片 */
+        .food-grid { columns: 3 240px; column-gap: 20px; width: 100%; max-width: 1100px; }
         .card {
-            break-inside: avoid; display: inline-block; width: 100%; margin-bottom: 25px;
-            background-color: var(--card-bg); border-radius: 15px; position: relative;
-            overflow: hidden; box-shadow: var(--shadow); cursor: pointer;
-            transition: 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            break-inside: avoid; display: inline-block; width: 100%; margin-bottom: 20px;
+            background: var(--card-bg); border-radius: 12px; overflow: hidden;
+            box-shadow: var(--shadow); cursor: pointer; transition: 0.3s;
         }
-        .card:hover { transform: translateY(-8px); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
-        .card img { width: 100%; height: auto; display: block; }
+        .card:hover { transform: translateY(-5px); }
+        .card img { width: 100%; height: auto; display: block; min-height: 100px; background: #eee; }
+        .card-info { padding: 15px; }
+        .card-info h3 { margin: 0; font-size: 16px; font-family: 'Noto Serif TC'; }
+        .card-tag { font-size: 11px; color: var(--accent-color); margin-top: 5px; display: block; }
 
-        .card-info { padding: 15px; border-top: 1px solid #f9f9f9; }
-        .card-info h3 { margin: 0; font-size: 1.05rem; font-family: 'Noto Serif TC', serif; font-weight: 700;}
-        .card-tag { font-size: 10px; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; color: #999; margin-top: 5px; display: inline-block; }
-
-        .card-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 255, 255, 0.94);
-            display: flex; flex-direction: column; justify-content: center;
-            align-items: center; opacity: 0; transition: opacity 0.3s ease;
-            padding: 20px; text-align: center; box-sizing: border-box;
-        }
-        .card:hover .card-overlay { opacity: 1; }
-
-        /* --- 5. Modal 彈窗優化 --- */
+        /* Modal */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.4); backdrop-filter: blur(8px);
-            justify-content: center; align-items: center; z-index: 1000;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+            justify-content: center; align-items: center; z-index: 2000;
         }
         .modal-content {
-            background: white; padding: 35px; border-radius: 20px; max-width: 480px; width: 90%;
-            position: relative; max-height: 85vh; overflow-y: auto;
+            background: var(--card-bg); padding: 30px; border-radius: 20px; width: 90%; max-width: 500px;
+            max-height: 85vh; overflow-y: auto; position: relative; color: var(--text-main);
         }
-        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; color: #ccc; }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; }
 
-        select, input[type=text], textarea {
-            width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #f0f0f0;
-            border-radius: 10px; box-sizing: border-box; background: #fafafa; font-size: 14px;
+        input, select, textarea { 
+            width: 100%; padding: 12px; margin-top: 8px; border: 1px solid #ddd; 
+            border-radius: 8px; box-sizing: border-box; background: var(--input-bg); color: var(--text-main);
         }
-        label { display: block; margin-top: 15px; font-weight: bold; font-size: 12px; color: #999; letter-spacing: 1px; }
-
-        .btn-group { display: flex; gap: 10px; margin-top: 30px; }
-        .btn-save { background: var(--accent-color); color: white; flex: 2; border: none; padding: 12px; border-radius: 10px; cursor: pointer; font-weight: bold; }
-        .btn-cancel { background: #f5f5f5; color: #999; flex: 1; border: none; border-radius: 10px; cursor: pointer; }
-        .btn-edit-trigger { background: #6c757d; color: white; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 13px; }
-        .btn-del { background: #fff1f1; color: #e57373; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 13px; }
-
-        .loader { display: none; text-align: center; color: var(--accent-color); font-size: 13px; margin-top: 15px; font-weight: bold; }
+        .btn-group { display: flex; gap: 10px; margin-top: 25px; }
+        .btn-main { background: var(--accent-color); color: white; flex: 2; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; text-decoration: none; text-align: center; }
+        
+        /* 響應式微調 */
+        @media (max-width: 600px) { .food-grid { columns: 2 150px; } }
     </style>
 </head>
 <body>
 
-    <h1>My Secret Food List</h1>
+    <div class="top-bar">
+        <button class="icon-btn" onclick="toggleTheme()" id="themeBtn">🌙</button>
+    </div>
+
+    <h1 onclick="askAdmin()">My Secret Food List</h1>
+
+    <div class="search-container">
+        <input type="text" class="search-input" id="searchInput" placeholder="搜尋店名、必點或心得..." oninput="handleSearch()">
+    </div>
 
     <div class="filter-bar" id="filterBar">
         <button class="filter-btn active" onclick="filterData('All')">全部</button>
@@ -133,9 +139,8 @@
         <button class="filter-btn" onclick="filterData('特色咖啡')">特色咖啡</button>
     </div>
 
-    <div class="admin-controls">
-        <button class="btn-add-main" onclick="openAddModal()">+ 新增店家</button>
-        <div class="sync-status" id="syncStatus">☁️ 雲端同步中...</div>
+    <div class="admin-controls" id="adminPanel">
+        <button class="btn-add" onclick="openAddModal()">+ 新增私藏店家</button>
     </div>
 
     <div class="food-grid" id="foodGrid"></div>
@@ -143,51 +148,35 @@
     <div id="formModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal('formModal')">×</span>
-            <h2 id="modalTitle" style="font-family: 'Noto Serif TC';">新增店家</h2>
-            <input type="hidden" id="editKey" value="">
-            
-            <label>分類標籤</label>
+            <h2 id="modalTitle" style="font-family:'Noto Serif TC'">新增店家</h2>
+            <input type="hidden" id="editKey">
             <select id="category">
                 <option value="甜點下午茶">甜點下午茶</option>
                 <option value="美味正餐">美味正餐</option>
                 <option value="深夜微醺">深夜微醺</option>
                 <option value="特色咖啡">特色咖啡</option>
             </select>
-
-            <label>店名</label>
-            <input type="text" id="name" placeholder="這家下午茶叫什麼？">
-            
-            <label>照片 (可選多張，不選則保留舊圖)</label>
-            <input type="file" id="files" accept="image/*" multiple onchange="handleFiles(this)">
+            <input type="text" id="name" placeholder="店名">
+            <input type="file" id="files" multiple onchange="handleFiles(this)">
             <div id="previewArea" style="display:flex; gap:5px; margin-top:10px; flex-wrap:wrap;"></div>
-            
-            <label>推薦必點 / 價格</label>
-            <input type="text" id="price" placeholder="例如：舒芙蕾 / $250">
-            
-            <label>評價心得</label>
-            <textarea id="desc" rows="3" placeholder="分享一下那裡的口感與氛圍..."></textarea>
-            
-            <label>地址</label>
-            <input type="text" id="addr" placeholder="例如：台北市信義區... (選填)">
-            
-            <div class="loader" id="loader">⏳ 正在壓縮圖片並上傳雲端，請稍候...</div>
-
-            <div class="btn-group" id="formActionBtns">
-                <button class="btn-save" onclick="saveData()">儲存店家資訊</button>
-                <button class="btn-cancel" onclick="closeModal('formModal')">取消</button>
+            <input type="text" id="price" placeholder="推薦必點 / 價格">
+            <textarea id="desc" rows="3" placeholder="心得..."></textarea>
+            <input type="text" id="addr" placeholder="地址 (系統會自動產生導航)">
+            <div id="loader" style="display:none; color:var(--accent-color); margin:10px 0;">處理中...</div>
+            <div class="btn-group">
+                <button class="btn-main" onclick="saveData()">儲存雲端</button>
             </div>
         </div>
     </div>
 
     <div id="detailModal" class="modal">
-        <div class="modal-content" id="detailContent">
-            </div>
+        <div class="modal-content" id="detailContent"></div>
     </div>
 
     <script>
-        // --- Firebase 設定 (請務必替換成你自己的金鑰) ---
+        // --- Firebase 設定 ---
         const firebaseConfig = {
-           apiKey: "AIzaSyAtlhLTdWy_n7K7IYDVhilv2wg_p51lFtI",
+            apiKey: "AIzaSyAtlhLTdWy_n7K7IYDVhilv2wg_p51lFtI",
             authDomain: "my-food-list.firebaseapp.com",
   	    databaseURL: "https://food-card-8c302-default-rtdb.asia-southeast1.firebasedatabase.app", // 注意是否有 asia-southeast1
   	    projectId: "my-food-list",
@@ -196,182 +185,150 @@
             appId: "Food Card"
         };
 
-        // 初始化 Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const dbRef = database.ref('foodList');
 
-        let allData = {}; // 存放所有資料
+        let allData = {};
+        let filteredKeys = [];
         let currentFilter = 'All';
+        let isAdmin = false;
         let tempImages = [];
 
-        // --- 核心：實時同步監聽 ---
+        // --- 1. 夜間模式切換 ---
+        function toggleTheme() {
+            const body = document.body;
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('themeBtn').innerText = isDark ? '🌙' : '☀️';
+        }
+
+        // --- 2. 管理員解鎖 ---
+        function askAdmin() {
+            if(isAdmin) return;
+            if (prompt("輸入暗號解鎖編輯權限：") === "au4a83") {
+                isAdmin = true;
+                document.getElementById('adminPanel').style.display = 'block';
+                render();
+            }
+        }
+
+        // --- 3. 搜尋功能 ---
+        function handleSearch() {
+            render();
+        }
+
         dbRef.on('value', (snapshot) => {
             allData = snapshot.val() || {};
-            document.getElementById('syncStatus').innerText = "☁️ 雲端已同步";
             render();
         });
 
-        // --- 渲染畫面 ---
         function render() {
             const grid = document.getElementById('foodGrid');
+            const term = document.getElementById('searchInput').value.toLowerCase();
             grid.innerHTML = '';
             
-            Object.keys(allData).forEach(key => {
+            Object.keys(allData).reverse().forEach(key => {
                 const item = allData[key];
+                const contentText = (item.name + item.desc + item.price + item.category).toLowerCase();
                 
-                // 標籤篩選
-                if(currentFilter !== 'All' && item.category !== currentFilter) return;
+                if (currentFilter !== 'All' && item.category !== currentFilter) return;
+                if (term && !contentText.includes(term)) return;
 
-                const cover = (item.images && item.images.length > 0) ? item.images[0] : 'https://via.placeholder.com/300x400?text=Food';
+                const cover = item.images ? item.images[0] : 'https://via.placeholder.com/300x400';
+                // 這裡使用了 loading="lazy" 實作圖片懶加載
                 grid.innerHTML += `
                     <div class="card" onclick="showDetail('${key}')">
-                        <img src="${cover}">
+                        <img src="${cover}" loading="lazy">
                         <div class="card-info">
                             <h3>${item.name}</h3>
-                            <span class="card-tag"># ${item.category}</span>
-                        </div>
-                        <div class="card-overlay">
-                            <p>${item.desc.substring(0, 30)}...</p>
-                            <span style="font-size:11px; color:var(--accent-color); font-weight:bold;">查看更多</span>
+                            <span class="card-tag">#${item.category}</span>
                         </div>
                     </div>
                 `;
             });
         }
 
-        // --- 圖片壓縮引擎 (防卡住與省空間關鍵) ---
-        function compressImage(file) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let width = img.width; let height = img.height;
-                        const MAX = 800; // 最大寬度
-                        if (width > MAX) { height *= MAX / width; width = MAX; }
-                        canvas.width = width; canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-                        // 強力壓縮：品質設為 0.4
-                        resolve(canvas.toDataURL('image/jpeg', 0.4));
-                    };
-                };
-            });
-        }
-
-        // --- 儲存資料 (新增與編輯共用) ---
-        function saveData() {
-            const name = document.getElementById('name').value;
-            if(!name) return alert("請輸入店名唷！");
-            
-            const key = document.getElementById('editKey').value;
-            const addr = document.getElementById('addr').value;
-            const mapUrl = "https://www.google.com/maps/search/" + encodeURIComponent(name + " " + addr);
-
-            const itemData = {
-                name: name,
-                category: document.getElementById('category').value,
-                price: document.getElementById('price').value,
-                desc: document.getElementById('desc').value,
-                addr: addr,
-                // 如果編輯時沒選新檔案，則保留雲端舊圖
-                images: tempImages.length > 0 ? tempImages : (key ? allData[key].images : []),
-                mapUrl: mapUrl,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP // 新增更新時間戳
-            };
-
-            if (key) {
-                // 編輯
-                database.ref('foodList/' + key).update(itemData);
-            } else {
-                // 新增
-                database.ref('foodList').push(itemData);
-            }
-            
-            closeModal('formModal');
-        }
-
-        // --- 顯示詳情 (新增編輯入口) ---
         function showDetail(key) {
             const item = allData[key];
             const content = document.getElementById('detailContent');
-            
             let imgsHtml = '';
-            item.images?.forEach(img => imgsHtml += `<img src="${img}" style="width:100%; border-radius:12px; margin-bottom:12px; object-fit:cover;">`);
+            item.images?.forEach(img => imgsHtml += `<img src="${img}" style="width:100%; border-radius:10px; margin-bottom:10px;" loading="lazy">`);
             
+            const adminTools = isAdmin ? `
+                <button onclick="openEditModal('${key}')" style="background:#eee; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">📝 編輯</button>
+                <button onclick="deleteItem('${key}')" style="background:#fff1f1; color:#e57373; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">🗑️ 刪除</button>
+            ` : '';
+
+            // 導航優化：優先使用地址，沒地址就搜尋店名
+            const navUrl = item.addr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.addr)}` 
+                                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.name)}`;
+
             content.innerHTML = `
                 <span class="close-btn" onclick="closeModal('detailModal')">×</span>
-                <div style="max-height:300px; overflow-y:auto; margin-bottom:15px;">${imgsHtml}</div>
-                <h2 style="font-family:'Noto Serif TC'">${item.name} <small style="font-size:12px; color:#aaa;">#${item.category}</small></h2>
-                <p style="font-size:14px; color:#555; line-height:1.6; background:#fdfbf9; padding:15px; border-radius:12px;">${item.desc}</p>
-                <div style="font-size:13px; color:#888; border-top: 1px solid #eee; padding-top:15px;">
-                    <p>Cake <strong>推薦必點：</strong>${item.price}</p>
-                    <p>📍 <strong>地址：</strong>${item.addr}</p>
+                <div style="max-height:280px; overflow-y:auto; margin-bottom:15px;">${imgsHtml}</div>
+                <h2 style="margin-top:0;">${item.name}</h2>
+                <p style="color:var(--text-muted); font-size:14px; line-height:1.6;">${item.desc}</p>
+                <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+                <p style="font-size:13px;">🍱 <strong>推薦：</strong>${item.price}</p>
+                <p style="font-size:13px;">📍 <strong>地址：</strong>${item.addr || '未提供'}</p>
+                <div class="btn-group">
+                    <a href="${navUrl}" target="_blank" class="btn-main">📍 開啟地圖導航</a>
                 </div>
-                <div class="btn-group" style="margin-top:20px;">
-                    <a href="${item.mapUrl}" target="_blank" class="btn-save" style="text-decoration:none; text-align:center;">📍 導航</a>
-                    <button class="btn-edit-trigger" onclick="openEditModal('${key}')">📝 編輯</button>
-                    <button class="btn-cancel" onclick="deleteItem('${key}')">🗑️ 刪除</button>
-                </div>
+                <div style="margin-top:20px; display:flex; gap:10px; justify-content:center;">${adminTools}</div>
             `;
             document.getElementById('detailModal').style.display = 'flex';
         }
 
-        // --- 打開編輯視窗 ---
-        function openEditModal(key) {
-            const item = allData[key];
-            document.getElementById('modalTitle').innerText = "編輯店家資訊";
-            document.getElementById('editKey').value = key;
-            
-            document.getElementById('name').value = item.name;
-            document.getElementById('category').value = item.category;
-            document.getElementById('price').value = item.price;
-            document.getElementById('desc').value = item.desc;
-            document.getElementById('addr').value = item.addr;
-            
-            // 顯示雲端舊圖預覽
-            const preview = document.getElementById('previewArea');
-            preview.innerHTML = '';
-            tempImages = []; // 重設暫存
-            if(item.images) {
-                item.images.forEach(src => {
-                    const img = document.createElement('img');
-                    img.src = src; img.style.width="50px"; preview.appendChild(img);
-                });
-            }
-
-            document.getElementById('detailModal').style.display = 'none';
-            document.getElementById('formModal').style.display = 'flex';
-        }
-
-        function filterData(cat) {
-            currentFilter = cat;
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.innerText === (cat === 'All' ? '全部' : cat));
-            });
-            render();
-        }
-
+        // --- 圖片壓縮 ---
         async function handleFiles(input) {
             const files = input.files;
-            if (files.length === 0) return;
+            if (!files.length) return;
             document.getElementById('loader').style.display = 'block';
-            document.getElementById('formActionBtns').style.display = 'none';
             tempImages = [];
-            const preview = document.getElementById('previewArea');
-            preview.innerHTML = '';
+            document.getElementById('previewArea').innerHTML = '';
+            
             for (let file of files) {
-                const compressed = await compressImage(file);
-                tempImages.push(compressed);
-                const img = document.createElement('img');
-                img.src = compressed; img.style.width="50px"; img.style.borderRadius="5px"; preview.appendChild(img);
+                const dataUrl = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.src = e.target.result;
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let w = img.width, h = img.height;
+                            if (w > 800) { h *= 800 / w; w = 800; }
+                            canvas.width = w; canvas.height = h;
+                            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                            resolve(canvas.toDataURL('image/jpeg', 0.4));
+                        };
+                    };
+                });
+                tempImages.push(dataUrl);
+                const pImg = document.createElement('img');
+                pImg.src = dataUrl; pImg.style.width="40px"; pImg.style.height="40px"; pImg.style.objectFit="cover";
+                document.getElementById('previewArea').appendChild(pImg);
             }
             document.getElementById('loader').style.display = 'none';
-            document.getElementById('formActionBtns').style.display = 'flex';
+        }
+
+        function saveData() {
+            const key = document.getElementById('editKey').value;
+            const name = document.getElementById('name').value;
+            if(!name) return alert("請輸入店名！");
+            
+            const data = {
+                name: name, category: document.getElementById('category').value,
+                price: document.getElementById('price').value, desc: document.getElementById('desc').value,
+                addr: document.getElementById('addr').value,
+                images: tempImages.length > 0 ? tempImages : (key ? allData[key].images : [])
+            };
+
+            if (key) database.ref('foodList/' + key).update(data);
+            else database.ref('foodList').push(data);
+            
+            closeModal('formModal');
         }
 
         function openAddModal() {
@@ -379,17 +336,30 @@
             document.getElementById('editKey').value = "";
             tempImages = [];
             document.getElementById('previewArea').innerHTML = '';
-            document.querySelectorAll('#formModal input, #formModal textarea').forEach(i => { if(i.id !== 'editKey') i.value = ''; });
+            document.querySelectorAll('#formModal input, #formModal textarea').forEach(i => i.value = '');
             document.getElementById('formModal').style.display = 'flex';
         }
 
-        function deleteItem(key) {
-            if(confirm("確定要從雲端移除這家下午茶嗎？")) {
-                database.ref('foodList/' + key).remove();
-                closeModal('detailModal');
-            }
+        function openEditModal(key) {
+            const item = allData[key];
+            document.getElementById('modalTitle').innerText = "編輯店家";
+            document.getElementById('editKey').value = key;
+            document.getElementById('name').value = item.name;
+            document.getElementById('category').value = item.category;
+            document.getElementById('price').value = item.price;
+            document.getElementById('desc').value = item.desc;
+            document.getElementById('addr').value = item.addr;
+            document.getElementById('detailModal').style.display = 'none';
+            document.getElementById('formModal').style.display = 'flex';
         }
 
+        function filterData(cat) {
+            currentFilter = cat;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.toggle('active', btn.innerText === (cat === 'All' ? '全部' : cat)));
+            render();
+        }
+
+        function deleteItem(key) { if(confirm("確定刪除嗎？")) { database.ref('foodList/' + key).remove(); closeModal('detailModal'); } }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
         window.onclick = function(e) { if(e.target.className === 'modal') closeModal(e.target.id); }
     </script>
