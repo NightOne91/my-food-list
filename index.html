@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的私藏美食雲端雜誌 - 雲端同步版</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    
+    <style>
+        :root {
+            --bg-img: url('https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1600');
+            --bg-overlay: rgba(252, 250, 247, 0.8); 
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --accent-color: #b5835a;
+            --text-main: #3d3d3d;
+            --shadow: 0 8px 24px rgba(0,0,0,0.08);
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap');
+
+        body {
+            font-family: "PingFang TC", sans-serif;
+            color: var(--text-main); margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; position: relative;
+        }
+
+        body::before {
+            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: var(--bg-img); background-size: cover; background-position: center; z-index: -2;
+        }
+        body::after {
+            content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-overlay); z-index: -1;
+        }
+
+        h1 { 
+            font-family: 'Noto Serif TC', serif; font-weight: 700; 
+            letter-spacing: 3px; margin: 40px 0 20px 0; color: #2c2c2c;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.8);
+        }
+
+        /* --- 1. 分類標籤設計 --- */
+        .filter-bar {
+            display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; justify-content: center;
+        }
+        .filter-btn {
+            padding: 8px 20px; border-radius: 20px; border: 1px solid var(--accent-color);
+            background: rgba(255,255,255,0.5); color: var(--accent-color);
+            cursor: pointer; font-size: 14px; transition: 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        .filter-btn.active {
+            background: var(--accent-color); color: white;
+            box-shadow: 0 4px 12px rgba(181, 131, 90, 0.3);
+        }
+
+        .admin-controls { display: flex; gap: 10px; margin-bottom: 40px; }
+        .btn-add-main {
+            background-color: var(--accent-color); color: white; border: none; padding: 12px 25px;
+            border-radius: 50px; cursor: pointer; font-size: 15px; font-weight: bold;
+            box-shadow: var(--shadow); transition: 0.3s;
+        }
+        /* 雲端狀態指示燈 */
+        .sync-status { font-size: 12px; color: #888; align-self: center; margin-left: 10px; }
+
+        /* --- 2. 瀑布流容器 --- */
+        .food-grid {
+            columns: 3 240px; column-gap: 25px; width: 100%; max-width: 1100px; padding: 20px;
+            box-sizing: border-box; margin: 0 auto;
+        }
+
+        .card {
+            break-inside: avoid; display: inline-block; width: 100%; margin-bottom: 25px;
+            background-color: var(--card-bg); border-radius: 15px; position: relative;
+            overflow: hidden; box-shadow: var(--shadow); cursor: pointer;
+            transition: 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+        .card:hover { transform: translateY(-8px); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
+        .card img { width: 100%; height: auto; display: block; }
+
+        .card-info { padding: 15px; border-top: 1px solid #f9f9f9; }
+        .card-info h3 { margin: 0; font-size: 1.05rem; font-family: 'Noto Serif TC', serif; }
+        .card-tag { font-size: 10px; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; color: #999; margin-top: 5px; display: inline-block; }
+
+        .card-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.94);
+            display: flex; flex-direction: column; justify-content: center;
+            align-items: center; opacity: 0; transition: opacity 0.3s ease;
+            padding: 20px; text-align: center; box-sizing: border-box;
+        }
+        .card:hover .card-overlay { opacity: 1; }
+
+        /* --- 3. Modal 彈窗優化 --- */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(8px);
+            justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-content {
+            background: white; padding: 35px; border-radius: 20px; max-width: 480px; width: 90%;
+            position: relative; max-height: 85vh; overflow-y: auto;
+        }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; color: #ccc; }
+
+        select, input[type=text], textarea {
+            width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #f0f0f0;
+            border-radius: 10px; box-sizing: border-box; background: #fafafa; font-size: 14px;
+        }
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 12px; color: #999; letter-spacing: 1px; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 30px; }
+        .btn-save { background: var(--accent-color); color: white; flex: 2; border: none; padding: 12px; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .btn-cancel { background: #f5f5f5; color: #999; flex: 1; border: none; border-radius: 10px; cursor: pointer; }
+
+        .loader { display: none; text-align: center; color: var(--accent-color); font-size: 13px; margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>My Secret Food List</h1>
+
+    <div class="filter-bar" id="filterBar">
+        <button class="filter-btn active" onclick="filterData('All')">全部</button>
+        <button class="filter-btn" onclick="filterData('甜點下午茶')">甜點下午茶</button>
+        <button class="filter-btn" onclick="filterData('美味正餐')">美味正餐</button>
+        <button class="filter-btn" onclick="filterData('深夜微醺')">深夜微醺</button>
+        <button class="filter-btn" onclick="filterData('特色咖啡')">特色咖啡</button>
+    </div>
+
+    <div class="admin-controls">
+        <button class="btn-add-main" onclick="openAddModal()">+ 新增店家</button>
+        <div class="sync-status" id="syncStatus">☁️ 雲端同步中...</div>
+    </div>
+
+    <div class="food-grid" id="foodGrid"></div>
+
+    <div id="formModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('formModal')">×</span>
+            <h2 id="modalTitle" style="font-family: 'Noto Serif TC';">新增店家</h2>
+            <input type="hidden" id="editKey" value="">
+            
+            <label>分類標籤</label>
+            <select id="category">
+                <option value="甜點下午茶">甜點下午茶</option>
+                <option value="美味正餐">美味正餐</option>
+                <option value="深夜微醺">深夜微醺</option>
+                <option value="特色咖啡">特色咖啡</option>
+            </select>
+
+            <label>店名</label>
+            <input type="text" id="name" placeholder="店名是？">
+            
+            <label>照片 (可多選)</label>
+            <input type="file" id="files" accept="image/*" multiple onchange="handleFiles(this)">
+            <div id="previewArea" style="display:flex; gap:5px; margin-top:10px; flex-wrap:wrap;"></div>
+            
+            <label>推薦必點 / 價格</label>
+            <input type="text" id="price" placeholder="例如：舒芙蕾 / $250">
+            
+            <label>評價心得</label>
+            <textarea id="desc" rows="3" placeholder="這裡的氛圍如何..."></textarea>
+            
+            <label>地址</label>
+            <input type="text" id="addr" placeholder="輸入地址...">
+            
+            <div class="loader" id="loader">⏳ 正在處理影像並上傳雲端...</div>
+
+            <div class="btn-group" id="formActionBtns">
+                <button class="btn-save" onclick="saveData()">確認儲存至雲端</button>
+                <button class="btn-cancel" onclick="closeModal('formModal')">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="detailModal" class="modal">
+        <div class="modal-content" id="detailContent"></div>
+    </div>
+
+    <script>
+        // --- Firebase 設定 (請替換成你自己的金鑰) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAtlhLTdWy_n7K7IYDVhilv2wg_p51lFtI",
+            authDomain: "my-food-list.firebaseapp.com",
+  	    databaseURL: "https://my-food-list-default-rtdb.asia-southeast1.firebasedatabase.app", // 注意是否有 asia-southeast1
+  	    projectId: "my-food-list",
+  	    storageBucket: "my-food-list.appspot.com",
+            messagingSenderId: "Jack",
+            appId: "Food Card"
+
+        };
+
+        // 初始化 Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const dbRef = database.ref('foodList');
+
+        let allData = {}; // 存放從雲端抓下來的所有資料
+        let currentFilter = 'All';
+        let tempImages = [];
+
+        // --- 核心：實時同步監聽 ---
+        dbRef.on('value', (snapshot) => {
+            allData = snapshot.val() || {};
+            document.getElementById('syncStatus').innerText = "☁️ 雲端已同步";
+            render();
+        });
+
+        function render() {
+            const grid = document.getElementById('foodGrid');
+            grid.innerHTML = '';
+            
+            Object.keys(allData).forEach(key => {
+                const item = allData[key];
+                
+                // 標籤篩選邏輯
+                if(currentFilter !== 'All' && item.category !== currentFilter) return;
+
+                const cover = (item.images && item.images.length > 0) ? item.images[0] : 'https://via.placeholder.com/300x400';
+                grid.innerHTML += `
+                    <div class="card" onclick="showDetail('${key}')">
+                        <img src="${cover}">
+                        <div class="card-info">
+                            <h3>${item.name}</h3>
+                            <span class="card-tag"># ${item.category}</span>
+                        </div>
+                        <div class="card-overlay">
+                            <p>${item.desc.substring(0, 30)}...</p>
+                            <span style="font-size:11px; color:var(--accent-color); font-weight:bold;">查看更多</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function filterData(cat) {
+            currentFilter = cat;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.innerText === (cat === 'All' ? '全部' : cat));
+            });
+            render();
+        }
+
+        // --- 儲存資料到 Firebase ---
+        function saveData() {
+            const name = document.getElementById('name').value;
+            if(!name) return alert("請輸入店名唷！");
+            
+            const key = document.getElementById('editKey').value;
+            const addr = document.getElementById('addr').value;
+            const mapUrl = "https://www.google.com/maps/search/" + encodeURIComponent(name + " " + addr);
+
+            const itemData = {
+                name: name,
+                category: document.getElementById('category').value,
+                price: document.getElementById('price').value,
+                desc: document.getElementById('desc').value,
+                addr: addr,
+                images: tempImages.length > 0 ? tempImages : (key ? allData[key].images : []),
+                mapUrl: mapUrl,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            if (key) {
+                database.ref('foodList/' + key).update(itemData);
+            } else {
+                database.ref('foodList').push(itemData);
+            }
+            
+            closeModal('formModal');
+        }
+
+        // --- 以下為輔助功能 (圖片壓縮、視窗控制等) ---
+        async function handleFiles(input) {
+            const files = input.files;
+            if (files.length === 0) return;
+            document.getElementById('loader').style.display = 'block';
+            tempImages = [];
+            const preview = document.getElementById('previewArea');
+            preview.innerHTML = '';
+            for (let file of files) {
+                const compressed = await compressImage(file);
+                tempImages.push(compressed);
+                const img = document.createElement('img');
+                img.src = compressed; img.style.width="50px"; img.style.borderRadius="5px";
+                preview.appendChild(img);
+            }
+            document.getElementById('loader').style.display = 'none';
+        }
+
+        function compressImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let width = img.width; let height = img.height;
+                        if (width > 800) { height *= 800 / width; width = 800; }
+                        canvas.width = width; canvas.height = height;
+                        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    };
+                };
+            });
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = "新增私藏店家";
+            document.getElementById('editKey').value = "";
+            tempImages = [];
+            document.getElementById('previewArea').innerHTML = '';
+            document.querySelectorAll('#formModal input, #formModal textarea').forEach(i => i.value = '');
+            document.getElementById('formModal').style.display = 'flex';
+        }
+
+        function showDetail(key) {
+            const item = allData[key];
+            const content = document.getElementById('detailContent');
+            let imgsHtml = '';
+            item.images?.forEach(img => imgsHtml += `<img src="${img}" style="width:100%; border-radius:12px; margin-bottom:12px;">`);
+            
+            content.innerHTML = `
+                <span class="close-btn" onclick="closeModal('detailModal')">×</span>
+                <div style="max-height:320px; overflow-y:auto; margin-bottom:15px;">${imgsHtml}</div>
+                <h2 style="font-family:'Noto Serif TC'">${item.name} <small style="font-size:12px; color:#aaa;">#${item.category}</small></h2>
+                <p style="font-size:14px; color:#555; line-height:1.6; background:#fdfbf9; padding:15px; border-radius:12px;">${item.desc}</p>
+                <div style="font-size:13px; color:#888; border-top: 1px solid #eee; padding-top:15px;">
+                    <p>🍰 <strong>推薦/價格：</strong>${item.price}</p>
+                    <p>📍 <strong>地址：</strong>${item.addr}</p>
+                </div>
+                <div class="btn-group">
+                    <a href="${item.mapUrl}" target="_blank" class="btn-save" style="text-decoration:none; text-align:center;">📍 導航</a>
+                    <button class="btn-cancel" onclick="deleteItem('${key}')">🗑️ 刪除</button>
+                </div>
+            `;
+            document.getElementById('detailModal').style.display = 'flex';
+        }
+
+        function deleteItem(key) {
+            if(confirm("確定要從雲端移除這家店嗎？")) {
+                database.ref('foodList/' + key).remove();
+                closeModal('detailModal');
+            }
+        }
+
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        window.onclick = function(e) { if(e.target.className === 'modal') closeModal(e.target.id); }
+    </script>
+</body>
+</html>
